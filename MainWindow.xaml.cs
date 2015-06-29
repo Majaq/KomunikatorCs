@@ -23,14 +23,13 @@ namespace messengerCs
     /// </summary>
     public partial class MainWindow : Window
     {
-        private int port=1000;
+        private int port=80;
         private String username="Anonymous";
         private String IpAdress="127.0.0.1";
         private TcpClient otherUser;
         private Thread serverTCP=null;
         private Thread clientTCP=null;
-        private Thread serverThread=null;
-        private Thread clientThread=null;
+        private Thread serverUDP=null;
         public MainWindow()
         {
             InitializeComponent();
@@ -92,30 +91,36 @@ namespace messengerCs
                 serverTCP.Abort();
             if (clientTCP != null && clientTCP.IsAlive)
                 clientTCP.Abort();
-            
+            if (serverUDP != null && serverUDP.IsAlive)
+                serverUDP.Abort();
             serverTCP=new Thread(testConnectionAsClient);
             clientTCP=new Thread(testConnectionAsServer);
+            serverUDP = new Thread(UdpServer);
             serverTCP.Start();
             clientTCP.Start();
+            serverUDP.Start();
         }
         
         private void UdpServer()
         {
-            UdpClient server;
+            UdpClient server= new UdpClient(port); ;
             IPEndPoint ip = new IPEndPoint(IPAddress.Parse(IpAdress), port);
-            try
+            while (true)
             {
-                server = new UdpClient(port);
-                Byte[] data = server.Receive(ref ip);
-                String dataParse = Encoding.ASCII.GetString(data);
-                Dispatcher.BeginInvoke(new Action(delegate()
+                try
                 {
-                    MessagesTextBlock.Text += "\n\n" + dataParse;
-                }));
-            }
-            catch (Exception E)
-            {
-                MessageBox.Show(E.Message);
+                    
+                    Byte[] data = server.Receive(ref ip);
+                    String dataParse = Encoding.ASCII.GetString(data);
+                    Dispatcher.BeginInvoke(new Action(delegate()
+                    {
+                        MessagesTextBlock.Text += dataParse+"\n";
+                    }));
+                }
+                catch (Exception E)
+                {
+                    MessageBox.Show(E.Message);
+                }
             }
         }
         private void Window_Closing_1(object sender, System.ComponentModel.CancelEventArgs e)
@@ -130,7 +135,26 @@ namespace messengerCs
 
         private void SendButton_Click(object sender, RoutedEventArgs e)
         {
+            MessagesTextBlock.Text += username + "("+System.DateTime.Now.Hour + ":" + System.DateTime.Now.Minute + ":" + System.DateTime.Now.Second + ")"+" - " + new TextRange(MessageTextBox.Document.ContentStart, MessageTextBox.Document.ContentEnd).Text+"\n";
+            try{
+                 UdpClient client = new UdpClient(IpAdress, port);
 
+                 Byte[] dane = Encoding.ASCII.GetBytes(username + "("+System.DateTime.Now.Hour + ":" + System.DateTime.Now.Minute + ":" + System.DateTime.Now.Second + ")"+" - " + new TextRange(MessageTextBox.Document.ContentStart, MessageTextBox.Document.ContentEnd).Text);
+                 client.Send(dane, dane.Length);
+                 client.Close();
+                }
+            catch(Exception ex){
+                 MessageBox.Show(ex.Message);
+                } 
+        }
+
+        private void MessageTextBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                SendButton_Click(sender, e);
+                MessageTextBox.Document.Blocks.Clear();
+            }
         }
     }
 }
